@@ -1,10 +1,5 @@
-- 👋 Hi, I’m @parshadn9
-- 👀 I’m interested in data analytics
-- 🌱 I’m currently learning Cloud Computing
-- 💞️ I’m looking to collaborate on ...
-- 📫 How to reach me ...
-
-<!---
-parshadn9/parshadn9 is a ✨ special ✨ repository because its `README.md` (this file) appears on your GitHub profile.
-You can click the Preview link to take a look at your changes.
---->
+👋 Hi, I’m @parshadn9
+👀 I’m passionate about data analytics and solving business challenges through data-driven insights.
+🌱 I’m currently expanding my knowledge in Cloud Computing and Data Engineering.
+💼 I’m eager to collaborate on data analytics projects, cloud computing solutions, and machine learning initiatives.
+📫 Feel free to reach me at parshadn9@example.com or connect with me on LinkedIn here.
