@@ -11,7 +11,7 @@ Here are some of the notable projects I've worked on:
 ### 1. **Waste Management Optimization using AI & IoT**
    - **Description**: A smart waste management system that leverages IoT sensors and AI to optimize waste collection routes and reduce operational costs.
    - **Technologies**: Python, GCP, Machine Learning, IoT Sensors
-   - [Project Repository](https://github.com/your-repo-link-here)
+   - [Project Repository](https://github.com/parshadn9/parshadn9/blob/main/21463247_BUS5002_Assessment2_Report.pdf)
 
 ### 2. **Tourer App**
    - **Description**: A mobile app designed to provide virtual guides and personalized tour recommendations using AI and cloud services.
