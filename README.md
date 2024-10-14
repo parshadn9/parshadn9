@@ -13,10 +13,11 @@ Here are some of the notable projects I've worked on:
    - **Technologies**: Python, GCP, Machine Learning, IoT Sensors
    - [Project Repository](https://github.com/parshadn9/parshadn9/blob/main/21463247_BUS5002_Assessment2_Report.pdf)
 
-### 2. **Tourer App**
-   - **Description**: A mobile app designed to provide virtual guides and personalized tour recommendations using AI and cloud services.
-   - **Technologies**: Flask, Heroku, AI, Google Cloud
-   - [Project Repository](https://github.com/your-repo-link-here)
+### 2. **Data Warehousing and Big Data Analysis**
+   - **Description**: A project focused on improving the dimensional model for customer behavior analysis and implementing a data analytics platform for geographical expansion using Microsoft technologies.
+   - **Technologies**: SQL Server Data Tools (SSDT), Power BI, SSRS, MDX Queries, Microsoft SQL Server
+   - [Project Repository](https://github.com/parshadn9/parshadn9/blob/main/21470508_Assignment_2_Dw.pdf)
+
 
 ### 3. **Customer Churn Prediction**
    - **Description**: Predicting customer churn for a telecom company using machine learning techniques to help improve customer retention strategies.
