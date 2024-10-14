@@ -16,7 +16,7 @@ Here are some of the notable projects I've worked on:
 ### 2. **Data Warehousing and Big Data Analysis**
    - **Description**: A project focused on improving the dimensional model for customer behavior analysis and implementing a data analytics platform for geographical expansion using Microsoft technologies.
    - **Technologies**: SQL Server Data Tools (SSDT), Power BI, SSRS, MDX Queries, Microsoft SQL Server
-   - [Project Repository]((https://github.com/parshadn9/parshadn9/blob/main/21470508_Assignment_2_Dw.pdf))
+   - [Project Repository](https://github.com/parshadn9/parshadn9/blob/main/21470508_Assignment_2_Dw.pdf)
 
 
 ### 3. **Customer Churn Prediction**
