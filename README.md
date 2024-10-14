@@ -34,4 +34,4 @@ I'm currently diving deeper into **Cloud Architecture** and **Advanced Machine L
 ## 💬 Let's Connect
 Feel free to connect with me via:
 - **Email**: parshadn9@example.com
-- [LinkedIn](https://linkedin.com/in/yourprofile)
+- [LinkedIn](www.linkedin.com/in/parshadnirbhavane)
