@@ -1,0 +1,1234 @@
+# Importing necessary libraries
+import pandas as pd
+
+
+# Replace with the correct path to your CSV file
+file_path = 'smart-bins-argyle-square.csv'  # If the file is in the same directory, else provide the full path
+waste_data = pd.read_csv(file_path)
+
+# Display the first few rows of the dataframe to verify successful loading
+print(waste_data.head())
+
+
+# Step 1: Data Cleaning
+
+# Handle missing values
+waste_data['bin_status'] = waste_data['bin_status'].fillna('Unknown')
+
+# Fill missing wastebasket_size with the average size or an assumed value
+average_size = waste_data['wastebasket_size'].mean()
+waste_data['wastebasket_size'] = waste_data['wastebasket_size'].fillna(average_size)
+
+# Convert 'time' column to datetime, handling time zone issues
+waste_data['time'] = pd.to_datetime(waste_data['time'], utc=True)
+
+# Step 2: Feature Extraction from 'time'
+waste_data['hour'] = waste_data['time'].dt.hour
+waste_data['day_of_week'] = waste_data['time'].dt.dayofweek
+waste_data['date'] = waste_data['time'].dt.date
+
+# Step 3: Handle 'latlong' column by splitting into 'latitude' and 'longitude'
+waste_data[['latitude', 'longitude']] = waste_data['latlong'].str.split(',', expand=True)
+waste_data['latitude'] = pd.to_numeric(waste_data['latitude'])
+waste_data['longitude'] = pd.to_numeric(waste_data['longitude'])
+
+# Display the cleaned data to verify
+print(waste_data.head())
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# 1. Descriptive Statistics
+print("Descriptive statistics for waste fill levels:")
+print(waste_data['status_current_fill_level'].describe())
+
+# 2. Plot the Distribution of Waste Fill Levels
+plt.figure(figsize=(10, 6))
+sns.histplot(waste_data['status_current_fill_level'], bins=20, kde=True)
+plt.title('Distribution of Current Fill Levels in Bins')
+plt.xlabel('Fill Level (%)')
+plt.ylabel('Frequency')
+plt.show()
+
+# 3. Analyze Waste Fill Levels by Bin Status
+plt.figure(figsize=(10, 6))
+sns.countplot(x='bin_status', data=waste_data)
+plt.title('Bin Status Count')
+plt.xlabel('Bin Status')
+plt.ylabel('Count')
+plt.show()
+
+# 4. Time-Based Analysis (Waste Generation by Hour)
+plt.figure(figsize=(10, 6))
+waste_data.groupby('hour')['status_current_fill_level'].mean().plot(kind='bar')
+plt.title('Average Waste Fill Level by Hour of the Day')
+plt.xlabel('Hour of Day')
+plt.ylabel('Average Fill Level (%)')
+plt.show()
+
+# 5. Time-Based Analysis (Waste Generation by Day of the Week)
+plt.figure(figsize=(10, 6))
+waste_data.groupby('day_of_week')['status_current_fill_level'].mean().plot(kind='bar')
+plt.title('Average Waste Fill Level by Day of the Week')
+plt.xlabel('Day of Week (0=Monday, 6=Sunday)')
+plt.ylabel('Average Fill Level (%)')
+plt.show()
+
+# 6. Geospatial Analysis (Optional)
+# If you want to visualize bin locations on a map, you can use libraries like folium for mapping.
+
+
+# Sort by time to ensure proper ordering
+waste_data = waste_data.sort_values(by='time')
+
+# Create lag features for fill level to predict future values
+waste_data['lag_fill_level'] = waste_data.groupby('serial')['status_current_fill_level'].shift(1)
+
+# Fill missing lag values with the current fill level for simplicity
+waste_data['lag_fill_level'].fillna(waste_data['status_current_fill_level'], inplace=True)
+
+# Display the dataset with the new lagged fill levels
+print(waste_data[['serial', 'time', 'status_current_fill_level', 'lag_fill_level']].head())
+
+
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_absolute_error
+
+# Define the features (X) and the target (y)
+X = waste_data[['lag_fill_level', 'hour', 'day_of_week', 'latitude', 'longitude', 'wastebasket_size']]
+y = waste_data['status_current_fill_level']
+
+# Split the data into training and test sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Train a Random Forest model
+model = RandomForestRegressor(n_estimators=100, random_state=42)
+model.fit(X_train, y_train)
+
+# Make predictions
+y_pred = model.predict(X_test)
+
+# Evaluate the model
+mae = mean_absolute_error(y_test, y_pred)
+print(f'Mean Absolute Error: {mae}')
+
+# You can now use the model to predict future fill levels!
+
+
+# Import necessary libraries
+import pandas as pd
+from sklearn.model_selection import train_test_split, RandomizedSearchCV
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.metrics import mean_absolute_error
+
+# Assuming X_train, X_test, y_train, y_test are already defined
+
+# 1. Define a reduced parameter grid with fewer options
+param_dist = {
+    'n_estimators': [100, 200],  # Reduced options for faster tuning
+    'max_depth': [10, 20],  # Reduced depth range
+    'min_samples_split': [2, 5],  # Reduced split options
+    'min_samples_leaf': [1, 2]  # Reduced leaf options
+}
+
+# 2. Instantiate RandomForest and RandomizedSearchCV with reduced n_iter and cv
+rf = RandomForestRegressor(random_state=42)
+random_search = RandomizedSearchCV(estimator=rf, param_distributions=param_dist, 
+                                   n_iter=10, cv=2, verbose=2, n_jobs=-1, 
+                                   scoring='neg_mean_absolute_error', random_state=42)
+
+# 3. Sample 50% of the training data for faster tuning
+X_train_sample, _, y_train_sample, _ = train_test_split(X_train, y_train, test_size=0.5, random_state=42)
+
+# 4. Fit the RandomizedSearchCV on the sampled training data
+random_search.fit(X_train_sample, y_train_sample)
+
+# 5. Best parameters from RandomizedSearchCV
+print(f"Best Parameters: {random_search.best_params_}")
+
+# 6. Evaluate the optimized model on the full test set
+y_pred = random_search.best_estimator_.predict(X_test)
+mae = mean_absolute_error(y_test, y_pred)
+print(f"Optimized MAE: {mae}")
+
+# 7. Optional: Train a simpler Decision Tree model for baseline comparison
+dt = DecisionTreeRegressor(random_state=42)
+dt.fit(X_train, y_train)
+
+# 8. Evaluate the Decision Tree on the test set
+y_pred_dt = dt.predict(X_test)
+mae_dt = mean_absolute_error(y_test, y_pred_dt)
+print(f"Decision Tree MAE: {mae_dt}")
+
+
+param_dist = {
+    'n_estimators': [150, 200, 250],
+    'max_depth': [8, 10, 12],
+    'min_samples_split': [2, 3],
+    'min_samples_leaf': [1, 2]
+}
+
+
+waste_data['hour_day_interaction'] = waste_data['hour'] * waste_data['day_of_week']
+
+
+importances = random_search.best_estimator_.feature_importances_
+feature_names = X_train.columns
+sorted_features = sorted(zip(importances, feature_names), reverse=True)
+print("Feature Importance Ranking:")
+for importance, name in sorted_features:
+    print(f"{name}: {importance}")
+
+
+from xgboost import XGBRegressor
+
+xgb = XGBRegressor(n_estimators=200, max_depth=10, learning_rate=0.1, random_state=42)
+xgb.fit(X_train, y_train)
+y_pred_xgb = xgb.predict(X_test)
+mae_xgb = mean_absolute_error(y_test, y_pred_xgb)
+print(f"XGBoost MAE: {mae_xgb}")
+
+
+from sklearn.model_selection import cross_val_score
+
+# Cross-validation for Random Forest
+cv_scores = cross_val_score(random_search.best_estimator_, X_train, y_train, cv=5, scoring='neg_mean_absolute_error')
+print(f"Cross-validated MAE: {-cv_scores.mean()}")
+
+
+pip install shap
+
+
+import shap
+
+# Fit a SHAP explainer
+explainer = shap.TreeExplainer(random_search.best_estimator_)
+shap_values = explainer.shap_values(X_test)
+
+# Plot summary plot
+shap.summary_plot(shap_values, X_test)
+
+
+import numpy as np
+from geopy.distance import geodesic
+
+# Example data: Bins and their coordinates (latitude, longitude)
+bins = [
+    {'bin_id': 1, 'location': (-37.802367, 144.966167)},  # Bin 1
+    {'bin_id': 2, 'location': (-37.802133, 144.966083)},  # Bin 2
+    {'bin_id': 3, 'location': (-37.803117, 144.965233)},  # Bin 3
+    {'bin_id': 4, 'location': (-37.802533, 144.965317)},  # Bin 4
+]
+
+# Depot or central location (Truck starts here)
+depot = (-37.8045, 144.962)
+
+# Greedy Heuristic Function
+def greedy_route(depot, bins):
+    current_location = depot
+    route = []
+    total_distance = 0
+
+    while bins:
+        # Find the closest bin
+        closest_bin = min(bins, key=lambda bin: geodesic(current_location, bin['location']).km)
+        route.append(closest_bin['bin_id'])
+        total_distance += geodesic(current_location, closest_bin['location']).km
+        current_location = closest_bin['location']
+        bins.remove(closest_bin)
+    
+    # Return to depot
+    total_distance += geodesic(current_location, depot).km
+    route.append("Return to Depot")
+
+    return route, total_distance
+
+# Execute the greedy heuristic
+route, total_distance = greedy_route(depot, bins)
+print(f"Optimized Route: {route}")
+print(f"Total Distance (km): {total_distance}")
+
+
+pip install pulp
+
+from pulp import LpProblem, LpMinimize, LpVariable, lpSum, value
+from itertools import combinations
+
+# Coordinates of bins (lat, long)
+bin_locations = {
+    0: (-37.8045, 144.962),  # Depot
+    1: (-37.802367, 144.966167),  # Bin 1
+    2: (-37.802133, 144.966083),  # Bin 2
+    3: (-37.803117, 144.965233),  # Bin 3
+    4: (-37.802533, 144.965317),  # Bin 4
+}
+
+# Distance calculation between two locations
+def distance(location1, location2):
+    return geodesic(location1, location2).km
+
+# Create distance matrix
+distance_matrix = {
+    (i, j): distance(bin_locations[i], bin_locations[j])
+    for i in bin_locations for j in bin_locations if i != j
+}
+
+# Linear Programming Problem Setup
+problem = LpProblem("Vehicle_Routing_Problem", LpMinimize)
+
+# Variables: x_ij is 1 if the truck goes from bin i to bin j, else 0
+x = LpVariable.dicts('x', distance_matrix, 0, 1, cat='Binary')
+
+# Objective function: Minimize the total distance
+problem += lpSum([x[i, j] * distance_matrix[i, j] for i, j in distance_matrix])
+
+# Constraints: Each bin must be visited exactly once
+for i in bin_locations:
+    problem += lpSum([x[i, j] for j in bin_locations if i != j]) == 1
+    problem += lpSum([x[j, i] for j in bin_locations if i != j]) == 1
+
+# Solve the problem
+problem.solve()
+
+# Output the results
+optimal_route = []
+for i, j in x:
+    if value(x[i, j]) == 1:
+        optimal_route.append((i, j))
+
+print("Optimal Route:", optimal_route)
+
+
+import folium
+
+# Create a map centered around the depot
+route_map = folium.Map(location=bin_locations[0], zoom_start=15)
+
+# Add depot marker
+folium.Marker(location=bin_locations[0], popup='Depot', icon=folium.Icon(color='green')).add_to(route_map)
+
+# Add markers for each bin
+for bin_id, location in bin_locations.items():
+    if bin_id != 0:  # Skip the depot
+        folium.Marker(location=location, popup=f"Bin {bin_id}").add_to(route_map)
+
+# Plot the route using optimal_route list
+for i, j in optimal_route:
+    folium.PolyLine(locations=[bin_locations[i], bin_locations[j]], color="blue").add_to(route_map)
+
+# Save the map as an HTML file
+route_map.save("optimized_route_with_capacity.html")
+
+# Display the map (optional in interactive environments)
+route_map
+
+
+from pulp import LpProblem, LpMinimize, LpVariable, lpSum, value
+from geopy.distance import geodesic
+
+# Coordinates of bins (lat, long)
+bin_locations = {
+    0: (-37.8045, 144.962),  # Depot
+    1: (-37.802367, 144.966167),  # Bin 1
+    2: (-37.802133, 144.966083),  # Bin 2
+    3: (-37.803117, 144.965233),  # Bin 3
+    4: (-37.802533, 144.965317),  # Bin 4
+}
+
+# Number of trucks
+num_trucks = 2
+
+# Truck capacity (maximum number of bins the truck can collect)
+truck_capacity = {1: 2, 2: 2}  # Capacity for each truck (truck 1 and truck 2)
+
+# Distance calculation between two locations
+def distance(location1, location2):
+    return geodesic(location1, location2).km
+
+# Create distance matrix
+distance_matrix = {
+    (i, j): distance(bin_locations[i], bin_locations[j])
+    for i in bin_locations for j in bin_locations if i != j
+}
+
+# Linear Programming Problem Setup
+problem = LpProblem("Multi_Truck_Vehicle_Routing_Problem", LpMinimize)
+
+# Variables: x_ijk is 1 if truck k goes from bin i to bin j, else 0
+x = LpVariable.dicts('x', [(i, j, k) for i in bin_locations for j in bin_locations for k in range(1, num_trucks + 1) if i != j], 0, 1, cat='Binary')
+
+# Objective function: Minimize the total distance traveled by all trucks
+problem += lpSum([x[i, j, k] * distance_matrix[i, j] for i in bin_locations for j in bin_locations for k in range(1, num_trucks + 1) if i != j])
+
+# Constraints: Each bin must be visited exactly once by one truck
+for i in bin_locations:
+    if i != 0:  # Exclude the depot
+        problem += lpSum([x[i, j, k] for j in bin_locations for k in range(1, num_trucks + 1) if i != j]) == 1
+
+# Capacity constraint: Each truck can only visit a limited number of bins
+for k in range(1, num_trucks + 1):
+    problem += lpSum([x[i, j, k] for i in bin_locations for j in bin_locations if i != j]) <= truck_capacity[k]
+
+# Solve the problem
+problem.solve()
+
+# Output the results
+optimal_routes = {k: [] for k in range(1, num_trucks + 1)}
+for i, j, k in x:
+    if value(x[i, j, k]) == 1:
+        optimal_routes[k].append((i, j))
+
+# Print the optimized routes for each truck
+for k in optimal_routes:
+    print(f"Optimized Route for Truck {k}: {optimal_routes[k]}")
+
+
+import folium
+
+# Create a map centered around the depot
+route_map = folium.Map(location=bin_locations[0], zoom_start=15)
+
+# Add depot marker
+folium.Marker(location=bin_locations[0], popup='Depot', icon=folium.Icon(color='green')).add_to(route_map)
+
+# Add markers for each bin
+for bin_id, location in bin_locations.items():
+    if bin_id != 0:  # Skip the depot
+        folium.Marker(location=location, popup=f"Bin {bin_id}").add_to(route_map)
+
+# Define color scheme for different trucks
+colors = ['blue', 'red', 'purple', 'orange']
+
+# Plot the routes for each truck
+for k, routes in optimal_routes.items():
+    for i, j in routes:
+        folium.PolyLine(locations=[bin_locations[i], bin_locations[j]], color=colors[k-1]).add_to(route_map)
+
+# Save the map as an HTML file
+route_map.save("optimized_route_multi_truck.html")
+
+# Display the map (optional in interactive environments)
+route_map
+
+
+import random
+import numpy as np
+from statistics import median, mode
+
+# Original bin data (you can add more if needed)
+bin_data = {
+    1: {'location': (-37.802367, 144.966167), 'fill_level': 75},  # Bin 1, 75% full
+    2: {'location': (-37.802133, 144.966083), 'fill_level': 60},  # Bin 2, 60% full
+    3: {'location': (-37.803117, 144.965233), 'fill_level': 80},  # Bin 3, 80% full
+    4: {'location': (-37.802533, 144.965317), 'fill_level': 50},  # Bin 4, 50% full
+}
+
+# Extract the existing bin locations and fill levels
+latitudes = [data['location'][0] for data in bin_data.values()]
+longitudes = [data['location'][1] for data in bin_data.values()]
+fill_levels = [data['fill_level'] for data in bin_data.values()]
+
+# Calculate the median values for latitude, longitude, and fill levels
+median_lat = median(latitudes)
+median_lon = median(longitudes)
+median_fill_level = median(fill_levels)
+mode_fill_level = mode(fill_levels)
+
+# Function to generate new fake bins around the median location
+def generate_fake_bins(n_bins=5, location_variation=0.001, fill_variation=10):
+    new_bins = {}
+    for i in range(len(bin_data) + 1, len(bin_data) + 1 + n_bins):
+        # Generate random locations near the median using location_variation
+        lat_offset = random.uniform(-location_variation, location_variation)
+        lon_offset = random.uniform(-location_variation, location_variation)
+        
+        new_lat = median_lat + lat_offset
+        new_lon = median_lon + lon_offset
+        
+        # Generate random fill levels around the median fill level using fill_variation
+        fill_level = np.clip(median_fill_level + random.uniform(-fill_variation, fill_variation), 0, 100)
+        
+        # Assign mode-based fill levels randomly with a 30% chance
+        if random.random() < 0.3:
+            fill_level = mode_fill_level
+        
+        # Add the new bin to the dictionary
+        new_bins[i] = {
+            'location': (new_lat, new_lon),
+            'fill_level': fill_level
+        }
+    
+    return new_bins
+
+# Generate 10 new fake bins
+fake_bins = generate_fake_bins(n_bins=10)
+
+# Update the original bin_data with the new fake bins
+bin_data.update(fake_bins)
+
+# Print the updated bin_data
+for bin_id, bin_info in bin_data.items():
+    print(f"Bin {bin_id}: Location: {bin_info['location']}, Fill Level: {bin_info['fill_level']:.2f}%")
+
+
+# Visualize the updated bin_data (including fake bins) on a Folium map
+
+# Create a map centered around the median location of the bins
+median_lat = median([data['location'][0] for data in bin_data.values()])
+median_lon = median([data['location'][1] for data in bin_data.values()])
+route_map = folium.Map(location=[median_lat, median_lon], zoom_start=15)
+
+# Add markers for each bin
+for bin_id, bin_info in bin_data.items():
+    location = bin_info['location']
+    fill_level = bin_info['fill_level']
+    
+    # Use red markers for bins with 70% or more fill, and blue for others
+    marker_color = 'red' if fill_level >= 75 else 'blue'
+    # Add a marker for each bin
+    folium.Marker(
+        location=location,
+        popup=f"Bin {bin_id}: {fill_level:.2f}% full",
+        icon=folium.Icon(color=marker_color)
+    ).add_to(route_map)
+
+# Save and display the map
+route_map
+
+
+import folium
+from geopy.distance import geodesic
+from pulp import LpProblem, LpMinimize, LpVariable, lpSum, value
+from statistics import median
+
+# Assume you have already generated the `bin_data` with fake bins
+# Example bin data, you can replace this with your actual bin_data
+bin_data = {
+    1: {'location': (-37.802367, 144.966167), 'fill_level': 75},  # Bin 1, 75% full
+    2: {'location': (-37.802133, 144.966083), 'fill_level': 60},  # Bin 2, 60% full
+    3: {'location': (-37.803117, 144.965233), 'fill_level': 80},  # Bin 3, 80% full
+    4: {'location': (-37.802533, 144.965317), 'fill_level': 50},  # Bin 4, 50% full
+    # Add your fake bins here
+}
+
+# Depot location (truck starts here)
+depot = (-37.8045, 144.962)
+
+# Combine depot with the bin locations
+bin_locations = {0: depot}  # Depot is location 0
+bin_locations.update({bin_id: data['location'] for bin_id, data in bin_data.items()})
+
+# Step 1: Route Optimization using Linear Programming (LP)
+
+# Distance calculation between two locations
+def distance(location1, location2):
+    return geodesic(location1, location2).km
+
+# Create distance matrix
+distance_matrix = {
+    (i, j): distance(bin_locations[i], bin_locations[j])
+    for i in bin_locations for j in bin_locations if i != j
+}
+
+# Set up the LP problem
+problem = LpProblem("Vehicle_Routing_Problem", LpMinimize)
+
+# Variables: x_ij is 1 if the truck goes from bin i to bin j, else 0
+x = LpVariable.dicts('x', distance_matrix, 0, 1, cat='Binary')
+
+# Objective function: Minimize the total distance traveled
+problem += lpSum([x[i, j] * distance_matrix[i, j] for i, j in distance_matrix])
+
+# Constraints: Each bin must be visited exactly once
+for i in bin_locations:
+    problem += lpSum([x[i, j] for j in bin_locations if i != j]) == 1
+    problem += lpSum([x[j, i] for j in bin_locations if i != j]) == 1
+
+# Solve the problem
+problem.solve()
+
+# Extract the optimized route
+optimal_route = []
+for i, j in x:
+    if value(x[i, j]) == 1:
+        optimal_route.append((i, j))
+
+print("Optimal Route:", optimal_route)
+
+# Step 2: Visualize the Optimized Route on a Folium Map
+
+# Create a map centered around the median location of the bins
+median_lat = median([data['location'][0] for data in bin_data.values()])
+median_lon = median([data['location'][1] for data in bin_data.values()])
+route_map = folium.Map(location=[median_lat, median_lon], zoom_start=15)
+
+# Add markers for each bin
+for bin_id, bin_info in bin_data.items():
+    location = bin_info['location']
+    fill_level = bin_info['fill_level']
+    
+    # Use red markers for bins with 70% or more fill, and blue for others
+    marker_color = 'red' if fill_level >= 70 else 'blue'
+    
+    # Add a marker for each bin
+    folium.Marker(
+        location=location,
+        popup=f"Bin {bin_id}: {fill_level:.2f}% full",
+        icon=folium.Icon(color=marker_color)
+    ).add_to(route_map)
+
+# Add depot marker
+folium.Marker(location=depot, popup="Depot", icon=folium.Icon(color='green')).add_to(route_map)
+
+# Plot the optimized route on the map
+for i, j in optimal_route:
+    folium.PolyLine([bin_locations[i], bin_locations[j]], color="blue").add_to(route_map)
+
+# Display the map directly (no need to save as HTML)
+route_map
+
+
+import folium
+import random
+import numpy as np
+from geopy.distance import geodesic
+from pulp import LpProblem, LpMinimize, LpVariable, lpSum, value
+from statistics import median
+
+# Original bin data
+bin_data = {
+    1: {'location': (-37.802367, 144.966167), 'fill_level': 75},  # Bin 1, 75% full
+    2: {'location': (-37.802133, 144.966083), 'fill_level': 60},  # Bin 2, 60% full
+    3: {'location': (-37.803117, 144.965233), 'fill_level': 80},  # Bin 3, 80% full
+    4: {'location': (-37.802533, 144.965317), 'fill_level': 50},  # Bin 4, 50% full
+}
+
+# Depot location (truck starts here)
+depot = (-37.8045, 144.962)
+
+# Parameters to control the range of new bin generation (fake bins)
+num_fake_bins = 10
+location_variation = 0.001  # Small variation in latitude/longitude for new bins
+fill_variation = 10  # Fill level variation
+
+# Function to generate fake bins
+def generate_fake_bins(num_bins, location_variation, fill_variation):
+    new_bins = {}
+    bin_start_id = len(bin_data) + 1
+    
+    for i in range(num_fake_bins):
+        # Slightly vary the location near the existing bins
+        lat_variation = random.uniform(-location_variation, location_variation)
+        lon_variation = random.uniform(-location_variation, location_variation)
+        
+        # Create a new bin location around the first bin's location
+        base_lat, base_lon = bin_data[1]['location']
+        new_location = (base_lat + lat_variation, base_lon + lon_variation)
+        
+        # Generate a random fill level around the median of the existing fill levels
+        new_fill_level = np.clip(random.uniform(50 - fill_variation, 80 + fill_variation), 0, 100)
+        
+        # Add the new bin to the dictionary
+        new_bins[bin_start_id + i] = {'location': new_location, 'fill_level': new_fill_level}
+    
+    return new_bins
+
+# Generate fake bins
+fake_bins = generate_fake_bins(num_fake_bins, location_variation, fill_variation)
+
+# Update the original bin data with fake bins
+bin_data.update(fake_bins)
+
+# Combine depot with the bin locations
+bin_locations = {0: depot}  # Depot is location 0
+bin_locations.update({bin_id: data['location'] for bin_id, data in bin_data.items()})
+
+# Step 1: Route Optimization using Linear Programming (LP)
+
+# Distance calculation between two locations
+def distance(location1, location2):
+    return geodesic(location1, location2).km
+
+# Create distance matrix
+distance_matrix = {
+    (i, j): distance(bin_locations[i], bin_locations[j])
+    for i in bin_locations for j in bin_locations if i != j
+}
+
+# Set up the LP problem
+problem = LpProblem("Single_Truck_Vehicle_Routing_Problem", LpMinimize)
+
+# Variables: x_ij is 1 if the truck goes from bin i to bin j, else 0
+x = LpVariable.dicts('x', distance_matrix, 0, 1, cat='Binary')
+
+# Objective function: Minimize the total distance traveled
+problem += lpSum([x[i, j] * distance_matrix[i, j] for i, j in distance_matrix])
+
+# Constraints: Each bin must be visited exactly once
+for i in bin_locations:
+    problem += lpSum([x[i, j] for j in bin_locations if i != j]) == 1
+    problem += lpSum([x[j, i] for j in bin_locations if i != j]) == 1
+
+# Solve the problem
+problem.solve()
+
+# Extract the optimized route
+optimal_route = []
+for i, j in x:
+    if value(x[i, j]) == 1:
+        optimal_route.append((i, j))
+
+# Step 2: Visualize the Optimized Route on a Folium Map
+
+# Create a map centered around the median location of the bins
+median_lat = median([data['location'][0] for data in bin_data.values()])
+median_lon = median([data['location'][1] for data in bin_data.values()])
+route_map = folium.Map(location=[median_lat, median_lon], zoom_start=15)
+
+# Add markers for each bin
+for bin_id, bin_info in bin_data.items():
+    location = bin_info['location']
+    fill_level = bin_info['fill_level']
+    
+    # Use red markers for bins with 70% or more fill, and blue for others
+    marker_color = 'red' if fill_level >= 70 else 'blue'
+    
+    # Add a marker for each bin
+    folium.Marker(
+        location=location,
+        popup=f"Bin {bin_id}: {fill_level:.2f}% full",
+        icon=folium.Icon(color=marker_color)
+    ).add_to(route_map)
+
+# Add depot marker
+folium.Marker(location=depot, popup="Depot", icon=folium.Icon(color='green')).add_to(route_map)
+
+# Plot the optimized route on the map
+for i, j in optimal_route:
+    folium.PolyLine([bin_locations[i], bin_locations[j]], color="blue").add_to(route_map)
+
+# Display the map directly (no need to save as HTML)
+route_map
+
+
+import folium
+import random
+import numpy as np
+from geopy.distance import geodesic
+from pulp import LpProblem, LpMinimize, LpVariable, lpSum, value
+from statistics import median
+
+# Original bin data
+bin_data = {
+    1: {'location': (-37.802367, 144.966167), 'fill_level': 75},  # Bin 1, 75% full
+    2: {'location': (-37.802133, 144.966083), 'fill_level': 60},  # Bin 2, 60% full
+    3: {'location': (-37.803117, 144.965233), 'fill_level': 80},  # Bin 3, 80% full
+    4: {'location': (-37.802533, 144.965317), 'fill_level': 50},  # Bin 4, 50% full
+}
+
+# Depot location (truck starts here)
+depot = (-37.8045, 144.962)
+
+# Parameters to control the range of new bin generation (fake bins)
+num_fake_bins = 46  # Total 50 bins including 4 original bins
+location_variation = 0.001  # Small variation in latitude/longitude for new bins
+fill_variation = 10  # Fill level variation
+
+# Function to generate fake bins
+def generate_fake_bins(num_bins, location_variation, fill_variation):
+    new_bins = {}
+    bin_start_id = len(bin_data) + 1
+    
+    for i in range(num_fake_bins):
+        # Slightly vary the location near the existing bins
+        lat_variation = random.uniform(-location_variation, location_variation)
+        lon_variation = random.uniform(-location_variation, location_variation)
+        
+        # Create a new bin location around the first bin's location
+        base_lat, base_lon = bin_data[1]['location']
+        new_location = (base_lat + lat_variation, base_lon + lon_variation)
+        
+        # Generate a random fill level around the median of the existing fill levels
+        new_fill_level = np.clip(random.uniform(50 - fill_variation, 80 + fill_variation), 0, 100)
+        
+        # Add the new bin to the dictionary
+        new_bins[bin_start_id + i] = {'location': new_location, 'fill_level': new_fill_level}
+    
+    return new_bins
+
+# Generate fake bins
+fake_bins = generate_fake_bins(num_fake_bins, location_variation, fill_variation)
+
+# Update the original bin data with fake bins
+bin_data.update(fake_bins)
+
+# Combine depot with the bin locations
+bin_locations = {0: depot}  # Depot is location 0
+bin_locations.update({bin_id: data['location'] for bin_id, data in bin_data.items()})
+
+# Step 1: Route Optimization using Linear Programming (LP)
+
+# Distance calculation between two locations
+def distance(location1, location2):
+    return geodesic(location1, location2).km
+
+# Create distance matrix
+distance_matrix = {
+    (i, j): distance(bin_locations[i], bin_locations[j])
+    for i in bin_locations for j in bin_locations if i != j
+}
+
+# Set up the LP problem for 50 bins
+problem = LpProblem("Single_Truck_Vehicle_Routing_Problem", LpMinimize)
+
+# Variables: x_ij is 1 if the truck goes from bin i to bin j, else 0
+x = LpVariable.dicts('x', distance_matrix, 0, 1, cat='Binary')
+
+# Objective function: Minimize the total distance traveled
+problem += lpSum([x[i, j] * distance_matrix[i, j] for i, j in distance_matrix])
+
+# Constraints: Each bin must be visited exactly once
+for i in bin_locations:
+    problem += lpSum([x[i, j] for j in bin_locations if i != j]) == 1
+    problem += lpSum([x[j, i] for j in bin_locations if i != j]) == 1
+
+# Solve the problem
+problem.solve()
+
+# Extract the optimized route
+optimal_route = []
+for i, j in x:
+    if value(x[i, j]) == 1:
+        optimal_route.append((i, j))
+
+# Step 2: Visualize the Optimized Route for 50 Bins on a Folium Map
+
+# Create a map centered around the median location of the bins
+median_lat = median([data['location'][0] for data in bin_data.values()])
+median_lon = median([data['location'][1] for data in bin_data.values()])
+route_map = folium.Map(location=[median_lat, median_lon], zoom_start=15)
+
+# Add markers for each bin
+for bin_id, bin_info in bin_data.items():
+    location = bin_info['location']
+    fill_level = bin_info['fill_level']
+    
+    # Use red markers for bins with 70% or more fill, and blue for others
+    marker_color = 'red' if fill_level >= 70 else 'blue'
+    
+    # Add a marker for each bin
+    folium.Marker(
+        location=location,
+        popup=f"Bin {bin_id}: {fill_level:.2f}% full",
+        icon=folium.Icon(color=marker_color)
+    ).add_to(route_map)
+
+# Add depot marker
+folium.Marker(location=depot, popup="Depot", icon=folium.Icon(color='green')).add_to(route_map)
+
+# Plot the optimized route on the map
+for i, j in optimal_route:
+    folium.PolyLine([bin_locations[i], bin_locations[j]], color="blue").add_to(route_map)
+
+# Display the map directly (no need to save as HTML)
+route_map
+
+
+import folium
+import random
+import numpy as np
+from geopy.distance import geodesic
+from pulp import LpProblem, LpMinimize, LpVariable, lpSum, value
+from statistics import median
+
+# Original bin data
+bin_data = {
+    1: {'location': (-37.802367, 144.966167), 'fill_level': 75},  # Bin 1, 75% full
+    2: {'location': (-37.802133, 144.966083), 'fill_level': 60},  # Bin 2, 60% full
+    3: {'location': (-37.803117, 144.965233), 'fill_level': 80},  # Bin 3, 80% full
+    4: {'location': (-37.802533, 144.965317), 'fill_level': 50},  # Bin 4, 50% full
+}
+
+# Depot location (truck starts here)
+depot = (-37.8045, 144.962)
+
+# Parameters to generate fake bins
+num_fake_bins = 46  # Total 50 bins including original bins
+location_variation = 0.001  # Variation in latitude/longitude for new bins
+fill_variation = 10  # Fill level variation
+
+# Function to generate fake bins
+def generate_fake_bins(num_bins, location_variation, fill_variation):
+    new_bins = {}
+    bin_start_id = len(bin_data) + 1
+    
+    for i in range(num_bins):
+        # Slightly vary the location near the existing bins
+        lat_variation = random.uniform(-location_variation, location_variation)
+        lon_variation = random.uniform(-location_variation, location_variation)
+        
+        # Create a new bin location around one of the existing bins
+        base_lat, base_lon = bin_data[1]['location']
+        new_location = (base_lat + lat_variation, base_lon + lon_variation)
+        
+        # Generate a random fill level around the median of the existing fill levels
+        new_fill_level = np.clip(random.uniform(50 - fill_variation, 80 + fill_variation), 0, 100)
+        
+        # Add the new bin to the dictionary
+        new_bins[bin_start_id + i] = {'location': new_location, 'fill_level': new_fill_level}
+    
+    return new_bins
+
+# Generate fake bins and update bin_data
+fake_bins = generate_fake_bins(num_fake_bins, location_variation, fill_variation)
+bin_data.update(fake_bins)
+
+# Step 1: Filter bins that are 70% full or more (including fake bins)
+filtered_bins = {bin_id: bin_info for bin_id, bin_info in bin_data.items() if bin_info['fill_level'] >= 70}
+
+# Add the depot to the filtered bin locations
+bin_locations = {0: depot}  # Depot is location 0
+bin_locations.update({bin_id: data['location'] for bin_id, data in filtered_bins.items()})
+
+# Step 2: Route Optimization for bins that are 70% full or more
+
+# Distance calculation between two locations
+def distance(location1, location2):
+    return geodesic(location1, location2).km
+
+# Create distance matrix
+distance_matrix = {
+    (i, j): distance(bin_locations[i], bin_locations[j])
+    for i in bin_locations for j in bin_locations if i != j
+}
+
+# Set up the LP problem for the filtered bins (70% full or more)
+problem = LpProblem("Single_Truck_Vehicle_Routing_Problem_Filtered", LpMinimize)
+
+# Variables: x_ij is 1 if the truck goes from bin i to bin j, else 0
+x = LpVariable.dicts('x', distance_matrix, 0, 1, cat='Binary')
+
+# Objective function: Minimize the total distance traveled
+problem += lpSum([x[i, j] * distance_matrix[i, j] for i, j in distance_matrix])
+
+# Constraints: Each filtered bin must be visited exactly once
+for i in bin_locations:
+    problem += lpSum([x[i, j] for j in bin_locations if i != j]) == 1
+    problem += lpSum([x[j, i] for j in bin_locations if i != j]) == 1
+
+# Solve the problem
+problem.solve()
+
+# Extract the optimized route and add numbering for each stop
+optimal_route_filtered = []
+ordered_bins = []
+for i, j in x:
+    if value(x[i, j]) == 1:
+        optimal_route_filtered.append((i, j))
+        ordered_bins.append(i)
+
+# Ensure the depot (0) is the starting point and generate the ordered route
+ordered_route = [0] + ordered_bins + [0]  # Add depot at the start and end
+
+# Step 3: Visualize the Optimized Route for Bins that are 70% Full or More
+
+# Create a map centered around the median location of the filtered bins
+median_lat = median([data['location'][0] for data in filtered_bins.values()])
+median_lon = median([data['location'][1] for data in filtered_bins.values()])
+route_map_filtered = folium.Map(location=[median_lat, median_lon], zoom_start=15)
+
+# Add markers for each filtered bin with numbering
+for index, bin_id in enumerate(ordered_route[1:-1], 1):  # Skip depot for numbering
+    if bin_id != 0:  # Skip depot when referencing filtered_bins
+        location = bin_locations[bin_id]
+        fill_level = filtered_bins[bin_id]['fill_level']
+        
+        # Use red markers for bins with 70% or more fill, and add numbering to popups
+        folium.Marker(
+            location=location,
+            popup=f"Bin {bin_id}: {fill_level:.2f}% full - Stop {index}",
+            icon=folium.Icon(color='red')
+        ).add_to(route_map_filtered)
+
+# Add depot marker
+folium.Marker(location=depot, popup="Depot (Start/End)", icon=folium.Icon(color='green')).add_to(route_map_filtered)
+
+# Plot the continuous optimized route
+route_coords = [bin_locations[bin_id] for bin_id in ordered_route]
+folium.PolyLine(route_coords, color="blue", weight=2.5, opacity=1).add_to(route_map_filtered)
+
+# Display the map directly (no need to save as HTML)
+route_map_filtered
+
+
+import folium
+import random
+import numpy as np
+from geopy.distance import geodesic
+from pulp import LpProblem, LpMinimize, LpVariable, lpSum, value
+from statistics import median
+from folium.plugins import TimestampedGeoJson
+
+# Original bin data
+bin_data = {
+    1: {'location': (-37.802367, 144.966167), 'fill_level': 75},  # Bin 1, 75% full
+    2: {'location': (-37.802133, 144.966083), 'fill_level': 60},  # Bin 2, 60% full
+    3: {'location': (-37.803117, 144.965233), 'fill_level': 80},  # Bin 3, 80% full
+    4: {'location': (-37.802533, 144.965317), 'fill_level': 50},  # Bin 4, 50% full
+}
+
+# Depot location (truck starts here)
+depot = (-37.8045, 144.962)
+
+# Parameters to generate fake bins
+num_fake_bins = 46  # Total 50 bins including original bins
+location_variation = 0.001  # Variation in latitude/longitude for new bins
+fill_variation = 10  # Fill level variation
+
+# Function to generate fake bins
+def generate_fake_bins(num_bins, location_variation, fill_variation):
+    new_bins = {}
+    bin_start_id = len(bin_data) + 1
+    
+    for i in range(num_bins):
+        # Slightly vary the location near the existing bins
+        lat_variation = random.uniform(-location_variation, location_variation)
+        lon_variation = random.uniform(-location_variation, location_variation)
+        
+        # Create a new bin location around one of the existing bins
+        base_lat, base_lon = bin_data[1]['location']
+        new_location = (base_lat + lat_variation, base_lon + lon_variation)
+        
+        # Generate a random fill level around the median of the existing fill levels
+        new_fill_level = np.clip(random.uniform(50 - fill_variation, 80 + fill_variation), 0, 100)
+        
+        # Add the new bin to the dictionary
+        new_bins[bin_start_id + i] = {'location': new_location, 'fill_level': new_fill_level}
+    
+    return new_bins
+
+# Generate fake bins and update bin_data
+fake_bins = generate_fake_bins(num_fake_bins, location_variation, fill_variation)
+bin_data.update(fake_bins)
+
+# Step 1: Filter bins that are 70% full or more (including fake bins)
+filtered_bins = {bin_id: bin_info for bin_id, bin_info in bin_data.items() if bin_info['fill_level'] >= 70}
+
+# Add the depot to the filtered bin locations
+bin_locations = {0: depot}  # Depot is location 0
+bin_locations.update({bin_id: data['location'] for bin_id, data in filtered_bins.items()})
+
+# Step 2: Route Optimization for bins that are 70% full or more
+
+# Distance calculation between two locations
+def distance(location1, location2):
+    return geodesic(location1, location2).km
+
+# Create distance matrix
+distance_matrix = {
+    (i, j): distance(bin_locations[i], bin_locations[j])
+    for i in bin_locations for j in bin_locations if i != j
+}
+
+# Set up the LP problem for the filtered bins (70% full or more)
+problem = LpProblem("Single_Truck_Vehicle_Routing_Problem_Filtered", LpMinimize)
+
+# Variables: x_ij is 1 if the truck goes from bin i to bin j, else 0
+x = LpVariable.dicts('x', distance_matrix, 0, 1, cat='Binary')
+
+# Objective function: Minimize the total distance traveled
+problem += lpSum([x[i, j] * distance_matrix[i, j] for i, j in distance_matrix])
+
+# Constraints: Each filtered bin must be visited exactly once
+for i in bin_locations:
+    problem += lpSum([x[i, j] for j in bin_locations if i != j]) == 1
+    problem += lpSum([x[j, i] for j in bin_locations if i != j]) == 1
+
+# Solve the problem
+problem.solve()
+
+# Extract the optimized route and add numbering for each stop
+optimal_route_filtered = []
+ordered_bins = []
+for i, j in x:
+    if value(x[i, j]) == 1:
+        optimal_route_filtered.append((i, j))
+        ordered_bins.append(i)
+
+# Ensure the depot (0) is the starting point and generate the ordered route
+ordered_route = [0] + ordered_bins + [0]  # Add depot at the start and end
+
+# Step 3: Visualize the Optimized Route with Animation
+
+# Create a map centered around the median location of the filtered bins
+median_lat = median([data['location'][0] for data in filtered_bins.values()])
+median_lon = median([data['location'][1] for data in filtered_bins.values()])
+route_map_filtered = folium.Map(location=[median_lat, median_lon], zoom_start=15)
+
+# Add markers for each filtered bin
+for bin_id in ordered_route[1:-1]:  # Skip depot for bins
+    if bin_id != 0:  # Skip depot when referencing filtered_bins
+        location = bin_locations[bin_id]
+        fill_level = filtered_bins[bin_id]['fill_level']
+        
+        # Use red markers for bins with 70% or more fill
+        folium.Marker(
+            location=location,
+            popup=f"Bin {bin_id}: {fill_level:.2f}% full",
+            icon=folium.Icon(color='red')
+        ).add_to(route_map_filtered)
+
+# Add depot marker
+folium.Marker(location=depot, popup="Depot (Start/End)", icon=folium.Icon(color='green')).add_to(route_map_filtered)
+
+# Step 4: Create animation with timestamped GeoJSON
+features = []
+
+# Define timestamps for each route segment
+time_step = 1000  # milliseconds per segment
+current_time = 0
+
+# Add each route segment with timing information
+for start_bin, end_bin in zip(ordered_route[:-1], ordered_route[1:]):
+    route_segment = {
+        "type": "Feature",
+        "geometry": {
+            "type": "LineString",
+            "coordinates": [
+                list(bin_locations[start_bin][::-1]),  # Reverse to match GeoJSON lat-lon order
+                list(bin_locations[end_bin][::-1])
+            ]
+        },
+        "properties": {
+            "times": [current_time, current_time + time_step],
+            "style": {"color": "blue", "weight": 3}
+        }
+    }
+    features.append(route_segment)
+    current_time += time_step
+
+# Create timestamped GeoJSON for animation
+timestamped_geojson = TimestampedGeoJson({
+    "type": "FeatureCollection",
+    "features": features
+}, period="PT1S", add_last_point=True)
+
+# Add the animation layer to the map
+timestamped_geojson.add_to(route_map_filtered)
+
+# Display the animated map
+route_map_filtered
+
+
+import folium
+import random
+import numpy as np
+from geopy.distance import geodesic
+from pulp import LpProblem, LpMinimize, LpVariable, lpSum, value
+from statistics import median
+
+# Step 1: Generate 200 bins with randomized locations and fill levels
+num_bins = 200
+location_variation = 0.005  # Larger variation in location for more spread-out bins
+fill_variation = 10  # Fill level variation
+
+# Base location for bins (centered around a point, such as a city)
+base_lat = -37.802367
+base_lon = 144.966167
+
+# Function to generate 200 bins
+def generate_bins(num_bins, location_variation, fill_variation):
+    bin_data = {}
+    for i in range(1, num_bins + 1):
+        lat_variation = random.uniform(-location_variation, location_variation)
+        lon_variation = random.uniform(-location_variation, location_variation)
+        location = (base_lat + lat_variation, base_lon + lon_variation)
+        fill_level = np.clip(random.uniform(50 - fill_variation, 80 + fill_variation), 0, 100)
+        bin_data[i] = {'location': location, 'fill_level': fill_level}
+    return bin_data
+
+# Generate the bins
+bin_data = generate_bins(num_bins, location_variation, fill_variation)
+
+# Step 2: Create 10 different starting points (depots) for trucks
+num_trucks = 10
+truck_depots = {}
+
+for i in range(1, num_trucks + 1):
+    lat_variation = random.uniform(-location_variation, location_variation)
+    lon_variation = random.uniform(-location_variation, location_variation)
+    truck_depots[i] = (base_lat + lat_variation, base_lon + lon_variation)
+
+# Step 3: Optimize the routes for each truck using Linear Programming (LP)
+
+# Distance calculation between two locations
+def distance(location1, location2):
+    return geodesic(location1, location2).km
+
+# Function to create route optimization for each truck
+def optimize_route(bin_data, depot_location):
+    # Create a dictionary combining depot and bin locations
+    bin_locations = {0: depot_location}  # 0 is the depot
+    bin_locations.update({bin_id: data['location'] for bin_id, data in bin_data.items()})
+
+    # Create distance matrix
+    distance_matrix = {
+        (i, j): distance(bin_locations[i], bin_locations[j])
+        for i in bin_locations for j in bin_locations if i != j
+    }
+
+    # Set up LP problem for route optimization
+    problem = LpProblem("Truck_Route_Optimization", LpMinimize)
+
+    # Variables: x_ij is 1 if the truck goes from bin i to bin j
+    x = LpVariable.dicts('x', distance_matrix, 0, 1, cat='Binary')
+
+    # Objective function: Minimize total distance traveled
+    problem += lpSum([x[i, j] * distance_matrix[i, j] for i, j in distance_matrix])
+
+    # Constraints: Each bin must be visited once, except the depot
+    for i in bin_locations:
+        problem += lpSum([x[i, j] for j in bin_locations if i != j]) == 1
+        problem += lpSum([x[j, i] for j in bin_locations if i != j]) == 1
+
+    # Solve the problem
+    problem.solve()
+
+    # Extract the optimized route
+    optimal_route = []
+    for i, j in x:
+        if value(x[i, j]) == 1:
+            optimal_route.append((i, j))
+
+    return optimal_route, bin_locations
+
+# Step 4: Visualize routes for 10 trucks without animation
+
+# Create a map centered around the median location of the bins
+median_lat = median([data['location'][0] for data in bin_data.values()])
+median_lon = median([data['location'][1] for data in bin_data.values()])
+route_map = folium.Map(location=[median_lat, median_lon], zoom_start=13)
+
+# Generate and plot routes for each truck
+for truck_id, depot in truck_depots.items():
+    # Optimize the route for each truck
+    truck_bin_data = {k: v for k, v in bin_data.items() if random.random() < 0.1}  # Randomly assign bins to each truck
+    optimal_route, truck_bin_locations = optimize_route(truck_bin_data, depot)
+    
+    # Add depot marker for the truck
+    folium.Marker(location=depot, popup=f"Truck {truck_id} Depot", icon=folium.Icon(color='green')).add_to(route_map)
+
+    # Add markers for the bins assigned to the truck
+    for bin_id, bin_info in truck_bin_data.items():
+        location = bin_info['location']
+        fill_level = bin_info['fill_level']
+        folium.Marker(location=location, popup=f"Bin {bin_id}: {fill_level:.2f}% full", icon=folium.Icon(color='red')).add_to(route_map)
+
+    # Plot the optimized route for each truck
+    for start_bin, end_bin in optimal_route:
+        folium.PolyLine([truck_bin_locations[start_bin], truck_bin_locations[end_bin]], color="blue", weight=2.5).add_to(route_map)
+
+# Display the map without animation
+route_map
