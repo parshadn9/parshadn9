@@ -3,7 +3,7 @@
 ## 👋 About Me
 Hi, I'm **Parshad Nirbhavane**, a passionate **Data Analyst** with expertise in **Data Analytics, Business Intelligence, Cloud Computing**, and **Machine Learning**. This repository contains my projects and resume, showcasing my journey and work across various domains.
 
-## 📄 [Download My Resume](https://github.com/parshadn9/parshadn9/blob/main/Parshad%20Nirbhavane.pdf)
+## 📄 [Download My Resume](https://github.com/parshadn9/parshadn9/blob/main/ParhadCV.pdf)
 
 ## 🔗 Projects
 Here are some of the notable projects I've worked on:
